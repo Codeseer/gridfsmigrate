@@ -48,9 +48,24 @@ class Migrator():
                             filename = gridfsId+"."+fileext
                         else:
                             filename = gridfsId
-                        print("uploading "+upload["name"] + "  "+ str(round(upload["size"]/1024/1024, 2)) + "  MB")
-                        s3.upload_fileobj(res, self.bucket, instanceId+"/uploads/"+upload["rid"]+"/"+upload["userId"]+"/"+gridfsId, ExtraArgs={"ContentDisposition":"inline; filename=\""+upload["name"]+"\"", "ContentType": upload["type"]})
-                        self.addtolog(gridfsId, filename, collection, res.md5, upload["rid"], upload["userId"], upload["name"])
+                        print(upload["path"])
+                        userVisitorId = None
+                        if "userId" in upload:
+                            objKey = instanceId+"/uploads/"+upload["rid"]+"/"+upload["userId"]+"/"+gridfsId
+                            userVisitorId = upload["userId"]
+                        else:
+                            objKey = instanceId+"/uploads/"+upload["rid"]+"/"+upload["visitorToken"]+"/"+gridfsId
+                            userVisitorId = upload["visitorToken"]
+                        try:
+                            objHead = s3.head_object(Bucket=self.bucket, Key=objKey)
+                            print("file already exists "+upload["name"])
+                        except:
+                            print("uploading "+upload["name"] + "  "+ str(round(upload["size"]/1024/1024, 2)) + "  MB")
+                            uploadType = ""
+                            if "type" in upload:
+                                uploadType = upload["type"]
+                            s3.upload_fileobj(res, self.bucket, objKey, ExtraArgs={"ContentDisposition":"inline; filename=\""+upload["name"]+"\"", "ContentType": uploadType})
+                        self.addtolog(gridfsId, filename, collection, res.md5, upload["rid"], userVisitorId, upload["name"])
                 else:
                     print(upload)
         self.writelog()
@@ -101,6 +116,7 @@ class Migrator():
                         }
                     }
                 })
+                print("updated "+name)
 
     def removeBlobs(self):
         with open(self.outDir + "/log.csv") as csvfile:
@@ -109,9 +125,11 @@ class Migrator():
             for row in reader:
                 dbId = row[0]
                 collectionName = row[2]
+                name = row[6]
                 fs = gridfs.GridFSBucket(db, bucket_name=collectionName)
                 try:
                     fs.delete(dbId)
+                    print('deleted '+name)
                 except:
                     continue
 
